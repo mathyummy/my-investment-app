@@ -184,6 +184,30 @@ def load_data():
         tw_stocks = pd.DataFrame(tw_worksheet.get_all_records())
         bank_cash = pd.DataFrame(cash_worksheet.get_all_records())
         
+        # 顯示實際讀到的欄位（診斷用）
+        with st.expander("🔍 資料結構診斷", expanded=False):
+            st.write("**US_Stocks 欄位：**", list(us_stocks.columns))
+            st.write("**TW_Stocks 欄位：**", list(tw_stocks.columns))
+            st.write("**Bank_Cash 欄位：**", list(bank_cash.columns))
+            st.write("**US_Stocks 前 3 筆資料：**")
+            st.dataframe(us_stocks.head(3))
+        
+        # 檢查必要欄位
+        required_us_cols = ['Ticker', 'Type', 'Qty', 'Cost', 'Currency']
+        required_tw_cols = ['Ticker', 'Name', 'Qty', 'Cost']
+        required_cash_cols = ['Ticker', 'Amount', 'Currency', 'Type']
+        
+        missing_us = [col for col in required_us_cols if col not in us_stocks.columns]
+        missing_tw = [col for col in required_tw_cols if col not in tw_stocks.columns]
+        missing_cash = [col for col in required_cash_cols if col not in bank_cash.columns]
+        
+        if missing_us:
+            raise Exception(f"US_Stocks 缺少欄位：{missing_us}")
+        if missing_tw:
+            raise Exception(f"TW_Stocks 缺少欄位：{missing_tw}")
+        if missing_cash:
+            raise Exception(f"Bank_Cash 缺少欄位：{missing_cash}")
+        
         return us_stocks, tw_stocks, bank_cash
     except Exception as e:
         raise Exception(f"讀取工作表失敗：{str(e)}")
@@ -452,5 +476,86 @@ if spreadsheet:
     
     except Exception as e:
         st.error(f"❌ 錯誤：{str(e)}")
+        
+        with st.expander("🔍 詳細除錯資訊與解決方案", expanded=True):
+            st.markdown(f"""
+            ### ⚠️ 錯誤訊息
+            ```
+            {str(e)}
+            ```
+            
+            ### 📋 常見問題與解決方案
+            
+            #### 1️⃣ 如果錯誤是「not in index」或「缺少欄位」
+            
+            **原因**：Google Sheets 的欄位標題不正確
+            
+            **解決方法**：
+            1. 開啟您的 Google Sheets
+            2. 確認每個工作表的**第一列**（標題列）完全符合以下格式：
+            
+            **US_Stocks 工作表標題列（第1列）：**
+            ```
+            Ticker | Type | Qty | Cost | Currency
+            ```
+            
+            **TW_Stocks 工作表標題列（第1列）：**
+            ```
+            Ticker | Name | Qty | Cost
+            ```
+            
+            **Bank_Cash 工作表標題列（第1列）：**
+            ```
+            Ticker | Amount | Currency | Type
+            ```
+            
+            ⚠️ **注意**：
+            - 欄位名稱必須**完全一致**（大小寫要相同）
+            - 不能有多餘的空格
+            - 不能有拼字錯誤
+            
+            #### 2️⃣ 範例資料格式
+            
+            **US_Stocks 範例（含標題）：**
+            ```
+            Ticker    Type    Qty    Cost      Currency
+            NVDA      Stock   37     145.50    USD
+            SGOV      ETF     1154   100.25    USD
+            AVGO      Stock   12     1250.00   USD
+            ```
+            
+            **TW_Stocks 範例（含標題）：**
+            ```
+            Ticker      Name        Qty     Cost
+            0050.TW     元大台灣50   5450    135.50
+            4925.TWO    智微        13000   85.30
+            2882.TW     國泰金      3000    52.80
+            ```
+            
+            **Bank_Cash 範例（含標題）：**
+            ```
+            Ticker              Amount     Currency    Type
+            CTBC_2025_01_16     1500000    TWD         定存
+            CATHAY_USD          15000      USD         活存
+            ```
+            
+            #### 3️⃣ 檢查步驟
+            
+            1. 確認工作表名稱正確：`US_Stocks`、`TW_Stocks`、`Bank_Cash`
+            2. 確認第一列是標題列（不是資料）
+            3. 確認標題欄位名稱完全正確
+            4. 確認至少有一筆資料（第二列開始）
+            5. 儲存 Google Sheets
+            6. 回到 Streamlit 點擊 **Reboot app**
+            
+            #### 4️⃣ 快速建立範本
+            
+            如果您的 Google Sheets 是空白的，可以：
+            1. 在每個工作表的第一列複製貼上上方的標題
+            2. 在第二列開始輸入測試資料
+            3. 儲存後重新載入 App
+            """)
+            
+            st.info("💡 設定完成後，請重新整理頁面或點擊 Reboot app")
 else:
     st.warning("⚠️ 無法連線到 Google Sheets，請檢查設定")
