@@ -92,7 +92,7 @@ m4.metric("退休目標進度", f"{(grand_total/50000000):.2%}", "Goal: 50M")
 st.sidebar.header("⏳ 定存到期倒數")
 today = datetime.now().date()
 for fd in fixed_deposits:
-    expiry = datetime.strptime(fd['Date'], "%20%y-%m-%d").date()
+    expiry = datetime.strptime(fd['Date'], "%Y-%m-%d").date()
     days_left = (expiry - today).days
     color = "red" if days_left < 14 else "white"
     st.sidebar.markdown(f":{color}[{fd['Bank']} ${fd['Amount']:,} | {fd['Date']} ({days_left}天)]")
