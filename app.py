@@ -7,555 +7,279 @@ import plotly.graph_objects as go
 import gspread
 from google.oauth2.service_account import Credentials
 
-# 頁面配置
+# ================= 頁面配置 =================
 st.set_page_config(
-    page_title="2037 退休資產堡壘",
+    page_title="2037 退休堡壘",
     page_icon="🏰",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
-# CSS 樣式注入
+# ================= 高級 CSS 樣式 =================
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap');
     
-    * {
+    html, body, [data-testid="stAppViewContainer"] {
         font-family: 'Noto Sans TC', sans-serif;
+        background-color: #f8fafc;
     }
-    
-    .main {
-        background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-    }
-    
-    .stApp {
-        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-    }
-    
-    .metric-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 20px;
-        border-radius: 15px;
-        box-shadow: 0 8px 16px rgba(0,0,0,0.2);
-        color: white;
+
+    /* 頂部標題美化 */
+    .main-title {
+        background: linear-gradient(90deg, #0f172a, #1e293b);
+        padding: 2rem;
+        border-radius: 0 0 2rem 2rem;
+        margin: -4rem -4rem 2rem -4rem;
         text-align: center;
-        margin: 10px 0;
+        box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
     }
-    
-    .metric-card h3 {
-        font-size: 16px;
-        font-weight: 400;
+    .main-title h1 {
+        color: #f1f5f9 !important;
+        font-weight: 700;
+        letter-spacing: 2px;
         margin: 0;
-        opacity: 0.9;
     }
     
-    .metric-card h1 {
-        font-size: 36px;
-        font-weight: 700;
-        margin: 10px 0;
-        color: #ffd700;
+    /* 現代化卡片設計 */
+    .metric-card {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 1.25rem;
+        box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+        border: 1px solid #e2e8f0;
+        transition: transform 0.2s ease;
+        margin-bottom: 1rem;
     }
-    
-    .metric-card p {
-        font-size: 14px;
-        margin: 5px 0 0 0;
-        opacity: 0.8;
-    }
-    
-    div[data-testid="stMetricValue"] {
-        font-size: 28px;
-        font-weight: 700;
-        color: #1e3c72;
-    }
-    
-    .section-header {
-        background: linear-gradient(90deg, #1e3c72, #2a5298);
-        color: white;
-        padding: 15px 20px;
-        border-radius: 10px;
-        margin: 20px 0 10px 0;
-        font-size: 20px;
-        font-weight: 600;
-    }
-    
-    .stButton>button {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border: none;
-        border-radius: 8px;
-        padding: 10px 24px;
-        font-weight: 600;
-        transition: all 0.3s;
-    }
-    
-    .stButton>button:hover {
+    .metric-card:hover {
         transform: translateY(-2px);
-        box-shadow: 0 6px 12px rgba(0,0,0,0.3);
+        box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+    }
+    .metric-label {
+        color: #64748b;
+        font-size: 0.875rem;
+        font-weight: 500;
+        margin-bottom: 0.5rem;
+    }
+    .metric-value {
+        color: #0f172a;
+        font-size: 1.75rem;
+        font-weight: 700;
+    }
+    
+    /* 進度條容器 */
+    .progress-container {
+        background: #e2e8f0;
+        border-radius: 999px;
+        height: 12px;
+        margin: 10px 0;
+        overflow: hidden;
+    }
+    .progress-bar {
+        background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+        height: 100%;
+        border-radius: 999px;
+    }
+
+    /* 隱藏 Streamlit 預設裝飾 */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    
+    /* Tabs 樣式優化 */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background-color: transparent;
+    }
+    .stTabs [data-baseweb="tab"] {
+        height: 50px;
+        white-space: pre-wrap;
+        background-color: white;
+        border-radius: 10px 10px 0 0;
+        gap: 1px;
+        padding-top: 10px;
+        padding-bottom: 10px;
+        border: 1px solid #e2e8f0;
+    }
+    .stTabs [aria-selected="true"] {
+        background-color: #0f172a !important;
+        color: white !important;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# 標題
-st.markdown("<h1 style='text-align: center; color: #1e3c72; margin-bottom: 30px;'>🏰 2037 退休資產堡壘</h1>", unsafe_allow_html=True)
-
-# 連接 Google Sheets (使用 gspread)
+# ================= Google Sheets 連線 =================
 @st.cache_resource
-def get_gspread_client():
+def get_spreadsheet():
     try:
-        # 從 secrets 讀取配置
-        credentials_dict = {
-            "type": st.secrets["gsheets"]["type"],
-            "project_id": st.secrets["gsheets"]["project_id"],
-            "private_key_id": st.secrets["gsheets"]["private_key_id"],
-            "private_key": st.secrets["gsheets"]["private_key"],
-            "client_email": st.secrets["gsheets"]["client_email"],
-            "client_id": st.secrets["gsheets"]["client_id"],
-            "auth_uri": st.secrets["gsheets"]["auth_uri"],
-            "token_uri": st.secrets["gsheets"]["token_uri"],
-            "auth_provider_x509_cert_url": st.secrets["gsheets"]["auth_provider_x509_cert_url"],
-            "client_x509_cert_url": st.secrets["gsheets"]["client_x509_cert_url"],
-        }
-        
-        # 如果有 universe_domain 就加入
-        if "universe_domain" in st.secrets["gsheets"]:
-            credentials_dict["universe_domain"] = st.secrets["gsheets"]["universe_domain"]
-        
-        # 建立憑證
-        scopes = [
-            "https://www.googleapis.com/auth/spreadsheets",
-            "https://www.googleapis.com/auth/drive"
-        ]
+        credentials_dict = {k: st.secrets["gsheets"][k] for k in st.secrets["gsheets"]}
+        scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
         credentials = Credentials.from_service_account_info(credentials_dict, scopes=scopes)
-        
-        # 建立 gspread 客戶端
         client = gspread.authorize(credentials)
-        
-        # 開啟試算表
-        spreadsheet_id = st.secrets["gsheets"]["spreadsheet"]
-        spreadsheet = client.open_by_key(spreadsheet_id)
-        
-        st.success(f"✅ 成功連線到 Google Sheets")
-        
-        return spreadsheet
-        
+        return client.open_by_key(st.secrets["gsheets"]["spreadsheet"])
     except Exception as e:
-        st.error(f"❌ 連線失敗：{str(e)}")
-        
-        with st.expander("🔍 除錯資訊", expanded=True):
-            st.markdown("""
-            ### 請確認 Secrets 格式：
-            
-            ```toml
-            [gsheets]
-            spreadsheet = "您的Sheet_ID"
-            type = "service_account"
-            project_id = "..."
-            private_key_id = "..."
-            private_key = "-----BEGIN PRIVATE KEY-----\\n...\\n-----END PRIVATE KEY-----\\n"
-            client_email = "...@....iam.gserviceaccount.com"
-            client_id = "..."
-            auth_uri = "https://accounts.google.com/o/oauth2/auth"
-            token_uri = "https://oauth2.googleapis.com/token"
-            auth_provider_x509_cert_url = "https://www.googleapis.com/oauth2/v1/certs"
-            client_x509_cert_url = "..."
-            universe_domain = "googleapis.com"
-            ```
-            
-            ### 檢查清單：
-            - ✅ spreadsheet 是純 ID（不含 URL）
-            - ✅ Service Account email 已加入 Google Sheets 共用（編輯者）
-            - ✅ Google Sheets API 和 Drive API 已啟用
-            """)
+        st.error(f"連線失敗: {e}")
         return None
 
-spreadsheet = get_gspread_client()
+spreadsheet = get_spreadsheet()
 
-# 讀取數據
+# ================= 核心計算與邏輯 =================
 @st.cache_data(ttl=300)
-def load_data():
+def load_all_data():
     try:
-        # 讀取各工作表
-        us_worksheet = spreadsheet.worksheet("US_Stocks")
-        tw_worksheet = spreadsheet.worksheet("TW_Stocks")
-        cash_worksheet = spreadsheet.worksheet("Bank_Cash")
-        
-        # 轉換為 DataFrame
-        us_stocks = pd.DataFrame(us_worksheet.get_all_records())
-        tw_stocks = pd.DataFrame(tw_worksheet.get_all_records())
-        bank_cash = pd.DataFrame(cash_worksheet.get_all_records())
-        
-        # 顯示實際讀到的欄位（診斷用）
-        with st.expander("🔍 資料結構診斷", expanded=False):
-            st.write("**US_Stocks 欄位：**", list(us_stocks.columns))
-            st.write("**TW_Stocks 欄位：**", list(tw_stocks.columns))
-            st.write("**Bank_Cash 欄位：**", list(bank_cash.columns))
-            st.write("**US_Stocks 前 3 筆資料：**")
-            st.dataframe(us_stocks.head(3))
-        
-        # 檢查必要欄位
-        required_us_cols = ['Ticker', 'Type', 'Qty', 'Cost', 'Currency']
-        required_tw_cols = ['Ticker', 'Name', 'Qty', 'Cost']
-        required_cash_cols = ['Ticker', 'Amount', 'Currency', 'Type']
-        
-        missing_us = [col for col in required_us_cols if col not in us_stocks.columns]
-        missing_tw = [col for col in required_tw_cols if col not in tw_stocks.columns]
-        missing_cash = [col for col in required_cash_cols if col not in bank_cash.columns]
-        
-        if missing_us:
-            raise Exception(f"US_Stocks 缺少欄位：{missing_us}")
-        if missing_tw:
-            raise Exception(f"TW_Stocks 缺少欄位：{missing_tw}")
-        if missing_cash:
-            raise Exception(f"Bank_Cash 缺少欄位：{missing_cash}")
-        
-        return us_stocks, tw_stocks, bank_cash
-    except Exception as e:
-        raise Exception(f"讀取工作表失敗：{str(e)}")
+        us = pd.DataFrame(spreadsheet.worksheet("US_Stocks").get_all_records())
+        tw = pd.DataFrame(spreadsheet.worksheet("TW_Stocks").get_all_records())
+        cash = pd.DataFrame(spreadsheet.worksheet("Bank_Cash").get_all_records())
+        return us, tw, cash
+    except:
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
-# 獲取即時股價
-@st.cache_data(ttl=300)
-def get_stock_price(ticker):
+@st.cache_data(ttl=600)
+def get_price(ticker):
     try:
-        stock = yf.Ticker(ticker)
-        data = stock.history(period="1d")
+        data = yf.Ticker(ticker).history(period="1d")
+        return data['Close'].iloc[-1] if not data.empty else 0
+    except: return 0
+
+@st.cache_data(ttl=600)
+def get_exchange_rate():
+    """抓取即時美金兌台幣匯率"""
+    try:
+        ticker = "USDTWD=X"
+        data = yf.Ticker(ticker).history(period="1d")
         if not data.empty:
             return data['Close'].iloc[-1]
-        return None
+        return 31.4 # 抓取失敗時的預設值
     except:
-        return None
+        return 31.4 # 異常時的預設值
 
-# 更新 Google Sheets
-def update_sheet(worksheet_name, dataframe):
+def update_db(sheet_name, df):
     try:
-        worksheet = spreadsheet.worksheet(worksheet_name)
-        # 清空現有數據（保留標題）
-        worksheet.clear()
-        # 更新數據（包含標題）
-        worksheet.update([dataframe.columns.values.tolist()] + dataframe.values.tolist())
+        ws = spreadsheet.worksheet(sheet_name)
+        ws.clear()
+        ws.update([df.columns.values.tolist()] + df.values.tolist())
         return True
-    except Exception as e:
-        st.error(f"更新失敗：{str(e)}")
-        return False
+    except: return False
 
-# 匯率設定
-USD_TO_TWD = 31.36
-
-# 載入數據
+# ================= 數據處理 =================
 if spreadsheet:
-    try:
-        us_stocks_df, tw_stocks_df, bank_cash_df = load_data()
-        
-        # 計算美股市值
-        us_total = 0
-        us_stocks_df['Current_Price'] = 0.0
-        us_stocks_df['Market_Value_USD'] = 0.0
-        us_stocks_df['Market_Value_TWD'] = 0.0
-        us_stocks_df['Profit_Loss'] = 0.0
-        
-        for idx, row in us_stocks_df.iterrows():
-            price = get_stock_price(row['Ticker'])
-            if price:
-                us_stocks_df.at[idx, 'Current_Price'] = price
-                mv_usd = price * row['Qty']
-                us_stocks_df.at[idx, 'Market_Value_USD'] = mv_usd
-                mv_twd = mv_usd * USD_TO_TWD
-                us_stocks_df.at[idx, 'Market_Value_TWD'] = mv_twd
-                us_stocks_df.at[idx, 'Profit_Loss'] = mv_usd - (row['Cost'] * row['Qty'])
-                us_total += mv_twd
-        
-        # 計算台股市值
-        tw_total = 0
-        tw_stocks_df['Current_Price'] = 0.0
-        tw_stocks_df['Market_Value'] = 0.0
-        tw_stocks_df['Profit_Loss'] = 0.0
-        
-        for idx, row in tw_stocks_df.iterrows():
-            price = get_stock_price(row['Ticker'])
-            if price:
-                tw_stocks_df.at[idx, 'Current_Price'] = price
-                mv = price * row['Qty']
-                tw_stocks_df.at[idx, 'Market_Value'] = mv
-                tw_stocks_df.at[idx, 'Profit_Loss'] = mv - (row['Cost'] * row['Qty'])
-                tw_total += mv
-        
-        # 計算現金
-        cash_total = 0
-        for _, row in bank_cash_df.iterrows():
-            if row['Currency'] == 'USD':
-                cash_total += row['Amount'] * USD_TO_TWD
-            else:
-                cash_total += row['Amount']
-        
-        # 總資產
-        total_assets = us_total + tw_total + cash_total
-        stock_total = us_total + tw_total
-        
-        # 退休計算
-        target_year = 2037
-        target_amount = 50_000_000
-        current_year = datetime.now().year
-        days_left = (date(target_year, 12, 31) - date.today()).days
-        achievement_rate = (total_assets / target_amount) * 100
-        
-        # 核心指標卡片
-        st.markdown("<div style='margin: 20px 0;'>", unsafe_allow_html=True)
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            st.markdown(f"""
-            <div class='metric-card'>
-                <h3>💰 總資產淨值</h3>
-                <h1>NT$ {total_assets:,.0f}</h1>
-                <p>即時市值計算</p>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with col2:
-            st.markdown(f"""
-            <div class='metric-card'>
-                <h3>📈 股票總市值</h3>
-                <h1>NT$ {stock_total:,.0f}</h1>
-                <p>美股 + 台股</p>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with col3:
-            st.markdown(f"""
-            <div class='metric-card'>
-                <h3>⏰ 退休倒數</h3>
-                <h1>{days_left}</h1>
-                <p>天 ({target_year - current_year} 年)</p>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with col4:
-            color = "#00ff00" if achievement_rate >= 100 else "#ffd700"
-            st.markdown(f"""
-            <div class='metric-card'>
-                <h3>🎯 目標達成率</h3>
-                <h1 style='color: {color};'>{achievement_rate:.1f}%</h1>
-                <p>目標 NT$ 50M</p>
-            </div>
-            """, unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-        
-        # 視覺化分析
-        st.markdown("<div class='section-header'>📊 資產配置分析</div>", unsafe_allow_html=True)
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            # 資產比例圓餅圖
-            asset_data = pd.DataFrame({
-                '類別': ['美股', '台股', '現金'],
-                '金額': [us_total, tw_total, cash_total]
-            })
-            
-            fig_pie = px.pie(
-                asset_data, 
-                values='金額', 
-                names='類別',
-                title='資產配置比例',
-                color_discrete_sequence=['#667eea', '#764ba2', '#f093fb']
-            )
-            fig_pie.update_traces(textposition='inside', textinfo='percent+label')
-            fig_pie.update_layout(
-                font=dict(family="Noto Sans TC", size=14),
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)'
-            )
-            st.plotly_chart(fig_pie, use_container_width=True)
-        
-        with col2:
-            # 獲利貢獻排行
-            profit_data = []
-            for _, row in us_stocks_df.iterrows():
-                if row['Profit_Loss'] != 0:
-                    profit_data.append({
-                        '標的': row['Ticker'],
-                        '損益': row['Profit_Loss'] * USD_TO_TWD
-                    })
-            
-            for _, row in tw_stocks_df.iterrows():
-                if row['Profit_Loss'] != 0:
-                    profit_data.append({
-                        '標的': row['Name'],
-                        '損益': row['Profit_Loss']
-                    })
-            
-            profit_df = pd.DataFrame(profit_data).sort_values('損益', ascending=True)
-            
-            fig_bar = px.bar(
-                profit_df.tail(10),
-                x='損益',
-                y='標的',
-                orientation='h',
-                title='獲利貢獻 TOP 10',
-                color='損益',
-                color_continuous_scale=['#ff6b6b', '#ffd700', '#51cf66']
-            )
-            fig_bar.update_layout(
-                font=dict(family="Noto Sans TC", size=14),
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)',
-                showlegend=False
-            )
-            st.plotly_chart(fig_bar, use_container_width=True)
-        
-        # 互動式資料表格
-        st.markdown("<div class='section-header'>🇺🇸 美股持倉 (可編輯)</div>", unsafe_allow_html=True)
-        
-        # 只顯示原始欄位供編輯
-        us_edit_cols = ['Ticker', 'Type', 'Qty', 'Cost', 'Currency']
-        edited_us = st.data_editor(
-            us_stocks_df[us_edit_cols],
-            use_container_width=True,
-            num_rows="dynamic"
-        )
-        
-        # 顯示完整資訊（含計算欄位）
-        st.dataframe(
-            us_stocks_df.style.format({
-                'Current_Price': '${:.2f}',
-                'Market_Value_USD': '${:,.2f}',
-                'Market_Value_TWD': 'NT${:,.0f}',
-                'Profit_Loss': '${:,.2f}'
-            }),
-            use_container_width=True
-        )
-        
-        if st.button("💾 儲存美股數據", key="save_us"):
-            if update_sheet("US_Stocks", edited_us):
-                st.success("✅ 美股數據已儲存至 Google Sheets！")
-                st.cache_data.clear()
-                st.rerun()
-        
-        st.markdown("<div class='section-header'>🇹🇼 台股持倉 (可編輯)</div>", unsafe_allow_html=True)
-        
-        tw_edit_cols = ['Ticker', 'Name', 'Qty', 'Cost']
-        edited_tw = st.data_editor(
-            tw_stocks_df[tw_edit_cols],
-            use_container_width=True,
-            num_rows="dynamic"
-        )
-        
-        st.dataframe(
-            tw_stocks_df.style.format({
-                'Current_Price': 'NT${:.2f}',
-                'Market_Value': 'NT${:,.0f}',
-                'Profit_Loss': 'NT${:,.0f}'
-            }),
-            use_container_width=True
-        )
-        
-        if st.button("💾 儲存台股數據", key="save_tw"):
-            if update_sheet("TW_Stocks", edited_tw):
-                st.success("✅ 台股數據已儲存至 Google Sheets！")
-                st.cache_data.clear()
-                st.rerun()
-        
-        st.markdown("<div class='section-header'>🏦 銀行現金 (可編輯)</div>", unsafe_allow_html=True)
-        edited_cash = st.data_editor(
-            bank_cash_df,
-            use_container_width=True,
-            num_rows="dynamic"
-        )
-        
-        if st.button("💾 儲存現金數據", key="save_cash"):
-            if update_sheet("Bank_Cash", edited_cash):
-                st.success("✅ 現金數據已儲存至 Google Sheets！")
-                st.cache_data.clear()
-                st.rerun()
-        
-        # 頁尾
-        st.markdown("---")
-        st.markdown(
-            "<p style='text-align: center; color: #666;'>🏰 2037 退休資產堡壘 | 資料每 5 分鐘更新 | Powered by Streamlit</p>",
-            unsafe_allow_html=True
-        )
+    us_df, tw_df, cash_df = load_all_data()
     
-    except Exception as e:
-        st.error(f"❌ 錯誤：{str(e)}")
+    # 獲取動態匯率
+    USD_TWD = get_exchange_rate()
+
+    # 計算美股
+    us_df['Price'] = us_df['Ticker'].apply(get_price)
+    us_df['MV_USD'] = us_df['Price'] * us_df['Qty']
+    us_df['MV_TWD'] = us_df['MV_USD'] * USD_TWD
+    us_df['Profit_TWD'] = (us_df['Price'] - us_df['Cost']) * us_df['Qty'] * USD_TWD
+    
+    # 計算台股
+    tw_df['Price'] = tw_df['Ticker'].apply(get_price)
+    tw_df['MV_TWD'] = tw_df['Price'] * tw_df['Qty']
+    tw_df['Profit_TWD'] = (tw_df['Price'] - tw_df['Cost']) * tw_df['Qty']
+
+    # 計算現金
+    cash_total_twd = 0
+    for _, r in cash_df.iterrows():
+        rate = USD_TWD if r['Currency'] == 'USD' else 1
+        cash_total_twd += r['Amount'] * rate
+
+    total_assets = us_df['MV_TWD'].sum() + tw_df['MV_TWD'].sum() + cash_total_twd
+    target = 50_000_000
+    achieve_rate = min(total_assets / target, 1.0)
+    days_to_2037 = (date(2037, 12, 31) - date.today()).days
+
+    # ================= UI 渲染 =================
+    st.markdown(f"""
+        <div class="main-title">
+            <h1>🏰 2037 退休資產堡壘</h1>
+            <p style="color: #94a3b8; margin-top: 8px;">掌握每一分資產的跳動</p>
+        </div>
+    """, unsafe_allow_html=True)
+
+    # 頂部四大指標
+    col1, col2, col3, col4 = st.columns([1,1,1,1])
+    with col1:
+        st.markdown(f"""<div class="metric-card"><div class="metric-label">💰 總資產淨值</div><div class="metric-value">NT$ {total_assets/1e6:.2f}M</div></div>""", unsafe_allow_html=True)
+    with col2:
+        st.markdown(f"""<div class="metric-card"><div class="metric-label">🎯 目標達成率</div><div class="metric-value">{achieve_rate*100:.1f}%</div><div class="progress-container"><div class="progress-bar" style="width: {achieve_rate*100}%"></div></div></div>""", unsafe_allow_html=True)
+    with col3:
+        st.markdown(f"""<div class="metric-card"><div class="metric-label">⏳ 退休倒計時</div><div class="metric-value">{days_to_2037:,} <span style="font-size: 1rem;">天</span></div></div>""", unsafe_allow_html=True)
+    with col4:
+        total_profit = us_df['Profit_TWD'].sum() + tw_df['Profit_TWD'].sum()
+        color = "#10b981" if total_profit > 0 else "#ef4444"
+        st.markdown(f"""<div class="metric-card"><div class="metric-label">📈 累計預估損益</div><div class="metric-value" style="color: {color}">NT$ {total_profit/1e4:.0f}W</div></div>""", unsafe_allow_html=True)
+
+    # 主內容 Tab 分區
+    tab_summary, tab_us, tab_tw, tab_cash = st.tabs(["📊 資產總覽", "🇺🇸 美股配置", "🇹🇼 台股配置", "🏦 現金管理"])
+
+    with tab_summary:
+        c1, c2 = st.columns(2)
+        with c1:
+            pie_df = pd.DataFrame({
+                'Category': ['美股', '台股', '現金'],
+                'Value': [us_df['MV_TWD'].sum(), tw_df['MV_TWD'].sum(), cash_total_twd]
+            })
+            fig = px.pie(pie_df, values='Value', names='Category', hole=.6, title="資產比例分佈",
+                         color_discrete_sequence=['#1e293b', '#3b82f6', '#94a3b8'])
+            fig.update_layout(margin=dict(t=40, b=0, l=0, r=0), height=350, showlegend=True)
+            st.plotly_chart(fig, use_container_width=True)
         
-        with st.expander("🔍 詳細除錯資訊與解決方案", expanded=True):
-            st.markdown(f"""
-            ### ⚠️ 錯誤訊息
-            ```
-            {str(e)}
-            ```
-            
-            ### 📋 常見問題與解決方案
-            
-            #### 1️⃣ 如果錯誤是「not in index」或「缺少欄位」
-            
-            **原因**：Google Sheets 的欄位標題不正確
-            
-            **解決方法**：
-            1. 開啟您的 Google Sheets
-            2. 確認每個工作表的**第一列**（標題列）完全符合以下格式：
-            
-            **US_Stocks 工作表標題列（第1列）：**
-            ```
-            Ticker | Type | Qty | Cost | Currency
-            ```
-            
-            **TW_Stocks 工作表標題列（第1列）：**
-            ```
-            Ticker | Name | Qty | Cost
-            ```
-            
-            **Bank_Cash 工作表標題列（第1列）：**
-            ```
-            Ticker | Amount | Currency | Type
-            ```
-            
-            ⚠️ **注意**：
-            - 欄位名稱必須**完全一致**（大小寫要相同）
-            - 不能有多餘的空格
-            - 不能有拼字錯誤
-            
-            #### 2️⃣ 範例資料格式
-            
-            **US_Stocks 範例（含標題）：**
-            ```
-            Ticker    Type    Qty    Cost      Currency
-            NVDA      Stock   37     145.50    USD
-            SGOV      ETF     1154   100.25    USD
-            AVGO      Stock   12     1250.00   USD
-            ```
-            
-            **TW_Stocks 範例（含標題）：**
-            ```
-            Ticker      Name        Qty     Cost
-            0050.TW     元大台灣50   5450    135.50
-            4925.TWO    智微        13000   85.30
-            2882.TW     國泰金      3000    52.80
-            ```
-            
-            **Bank_Cash 範例（含標題）：**
-            ```
-            Ticker              Amount     Currency    Type
-            CTBC_2025_01_16     1500000    TWD         定存
-            CATHAY_USD          15000      USD         活存
-            ```
-            
-            #### 3️⃣ 檢查步驟
-            
-            1. 確認工作表名稱正確：`US_Stocks`、`TW_Stocks`、`Bank_Cash`
-            2. 確認第一列是標題列（不是資料）
-            3. 確認標題欄位名稱完全正確
-            4. 確認至少有一筆資料（第二列開始）
-            5. 儲存 Google Sheets
-            6. 回到 Streamlit 點擊 **Reboot app**
-            
-            #### 4️⃣ 快速建立範本
-            
-            如果您的 Google Sheets 是空白的，可以：
-            1. 在每個工作表的第一列複製貼上上方的標題
-            2. 在第二列開始輸入測試資料
-            3. 儲存後重新載入 App
-            """)
-            
-            st.info("💡 設定完成後，請重新整理頁面或點擊 Reboot app")
+        with c2:
+            rank_df = pd.concat([
+                us_df[['Ticker', 'Profit_TWD']].rename(columns={'Ticker': 'Name'}),
+                tw_df[['Name', 'Profit_TWD']]
+            ]).sort_values('Profit_TWD', ascending=False).head(8)
+            fig_bar = px.bar(rank_df, x='Profit_TWD', y='Name', orientation='h', title="獲利貢獻排行",
+                             color='Profit_TWD', color_continuous_scale='RdYlGn')
+            fig_bar.update_layout(margin=dict(t=40, b=0, l=0, r=0), height=350)
+            st.plotly_chart(fig_bar, use_container_width=True)
+
+    with tab_us:
+        st.subheader("美股持倉編輯")
+        us_edit = st.data_editor(us_df[['Ticker', 'Type', 'Qty', 'Cost', 'Currency']], 
+                                 num_rows="dynamic", use_container_width=True, key="ed_us")
+        if st.button("💾 更新美股資料"):
+            if update_db("US_Stocks", us_edit):
+                st.success("更新成功！")
+                st.rerun()
+        
+        st.markdown("---")
+        st.write("🔍 **即時估值詳情**")
+        st.dataframe(us_df[['Ticker', 'Qty', 'Cost', 'Price', 'MV_USD', 'Profit_TWD']].style.format({
+            'Cost': '{:.2f}', 'Price': '{:.2f}', 'MV_USD': '{:,.0f}', 'Profit_TWD': '{:,.0f}'
+        }), use_container_width=True)
+
+    with tab_tw:
+        st.subheader("台股持倉編輯")
+        tw_edit = st.data_editor(tw_df[['Ticker', 'Name', 'Qty', 'Cost']], 
+                                 num_rows="dynamic", use_container_width=True, key="ed_tw")
+        if st.button("💾 更新台股資料"):
+            if update_db("TW_Stocks", tw_edit):
+                st.success("更新成功！")
+                st.rerun()
+
+        st.markdown("---")
+        st.write("🔍 **即時估值詳情**")
+        st.dataframe(tw_df[['Name', 'Qty', 'Cost', 'Price', 'MV_TWD', 'Profit_TWD']].style.format({
+            'Cost': '{:.2f}', 'Price': '{:.2f}', 'MV_TWD': '{:,.0f}', 'Profit_TWD': '{:,.0f}'
+        }), use_container_width=True)
+
+    with tab_cash:
+        st.subheader("現金與定存編輯")
+        cash_edit = st.data_editor(cash_df[['Ticker', 'Amount', 'Currency', 'Type']], 
+                                   num_rows="dynamic", use_container_width=True, key="ed_cash")
+        if st.button("💾 更新現金資料"):
+            if update_db("Bank_Cash", cash_edit):
+                st.success("更新成功！")
+                st.rerun()
+
+    # 頁腳
+    st.markdown(f"""
+        <div style="text-align: center; color: #94a3b8; font-size: 0.8rem; margin-top: 3rem; padding: 1rem;">
+            最後更新時間: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | 即時匯率 (USD/TWD): {USD_TWD:.2f}
+        </div>
+    """, unsafe_allow_html=True)
+
 else:
-    st.warning("⚠️ 無法連線到 Google Sheets，請檢查設定")
+    st.warning("⚠️ 請確認 .streamlit/secrets.toml 設定正確。")
