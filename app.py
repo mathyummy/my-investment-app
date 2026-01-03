@@ -11,10 +11,9 @@ st.markdown("""
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap');
     html, body, [class*="css"] { font-family: 'Noto Sans TC', sans-serif; }
     .stMetric { background-color: #ffffff; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-top: 5px solid #1e3a8a; }
-    [data-testid="stHeader"] { background-color: #1e3a8a; }
     h1, h2, h3 { color: #1e3a8a; }
     </style>
-    """, unsafe_allow_stdio=True)
+    """, unsafe_allow_html=True) # <-- 這裡原本打錯了，現在已修正為 html
 
 # --- 2. 連動 Google Sheets ---
 conn = st.connection("gsheets", type=GSheetsConnection)
