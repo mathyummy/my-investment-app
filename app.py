@@ -395,6 +395,7 @@ except Exception as e:
         token_uri = "https://oauth2.googleapis.com/token"
         auth_provider_x509_cert_url = "https://www.googleapis.com/oauth2/v1/certs"
         client_x509_cert_url = "https://www.googleapis.com/robot/v1/metadata/x509/..."
+        universe_domain = "googleapis.com"
         ```
         
         ### ⚠️ 關鍵要點
@@ -402,7 +403,8 @@ except Exception as e:
         1. **區塊名稱**：必須是 `[gsheets]`（不是 `[connections.gsheets]`）
         2. **spreadsheet**：只填 Sheet ID（從 URL 的 /d/ 和 /edit 之間複製）
         3. **private_key**：記得保留 `\\n` 換行符號
-        4. **共用權限**：必須將 `client_email` 加入 Google Sheets 共用（編輯者）
+        4. **universe_domain**：必須加上 `universe_domain = "googleapis.com"`（新版必要欄位）
+        5. **共用權限**：必須將 `client_email` 加入 Google Sheets 共用（編輯者）
         
         ### 🔑 取得 Sheet ID
         
