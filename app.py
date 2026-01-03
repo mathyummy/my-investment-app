@@ -15,10 +15,16 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 # --- 2. 讀取數據 ---
 @st.cache_data(ttl=600) # 每 10 分鐘抓取一次 Sheet 更新
 def load_data():
-    us_df = conn.read(worksheet="US_Stocks")
-    tw_df = conn.read(worksheet="TW_Stocks")
-    bank_df = conn.read(worksheet="Bank_Cash")
-    return us_df, tw_df, bank_df
+    # 這裡不需要再寫 spreadsheet=SHEET_URL
+    # 只要 Secrets 設定正確，它會自動抓取
+    try:
+        us_df = conn.read(worksheet="US_Stocks", ttl="0")
+        tw_df = conn.read(worksheet="TW_Stocks", ttl="0")
+        bank_df = conn.read(worksheet="Bank_Cash", ttl="0")
+        return us_df, tw_df, bank_df
+    except Exception as e:
+        st.error(f"讀取分頁失敗，請確認分頁名稱是否完全符合：{e}")
+        return None, None, None
 
 try:
     df_us, df_tw, df_bank = load_data()
