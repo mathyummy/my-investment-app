@@ -100,16 +100,40 @@ st.markdown("<h1 style='text-align: center; color: #1e3c72; margin-bottom: 30px;
 # 連接 Google Sheets
 @st.cache_resource
 def get_connection():
-    return st.connection("gsheets", type=GSheetsConnection)
+    try:
+        # 直接從 secrets 取得 spreadsheet
+        if "gsheets" not in st.secrets:
+            raise Exception("找不到 [gsheets] 設定區塊")
+        
+        # 檢查必要參數
+        gsheets_config = st.secrets["gsheets"]
+        if "spreadsheet" not in gsheets_config:
+            raise Exception("secrets 中缺少 spreadsheet 參數")
+        
+        spreadsheet_url = gsheets_config["spreadsheet"]
+        if not spreadsheet_url or spreadsheet_url.strip() == "":
+            raise Exception("spreadsheet 參數為空")
+        
+        # 建立連線時明確指定 spreadsheet
+        return st.connection("gsheets", type=GSheetsConnection, spreadsheet=spreadsheet_url)
+    except Exception as e:
+        st.error(f"⚠️ Google Sheets 連線失敗：{str(e)}")
+        with st.expander("🔍 詳細錯誤資訊", expanded=True):
+            st.code(str(e))
+            st.warning("請確認 Streamlit Secrets 已正確設定")
+        return None
 
 conn = get_connection()
 
 # 讀取數據
 @st.cache_data(ttl=300)
 def load_data():
-    us_stocks = conn.read(worksheet="US_Stocks")
-    tw_stocks = conn.read(worksheet="TW_Stocks")
-    bank_cash = conn.read(worksheet="Bank_Cash")
+    if conn is None:
+        raise Exception("無法建立 Google Sheets 連線，請檢查 Secrets 設定")
+    
+    us_stocks = conn.read(worksheet="US_Stocks", ttl=0)
+    tw_stocks = conn.read(worksheet="TW_Stocks", ttl=0)
+    bank_cash = conn.read(worksheet="Bank_Cash", ttl=0)
     return us_stocks, tw_stocks, bank_cash
 
 # 獲取即時股價
@@ -345,4 +369,56 @@ try:
 
 except Exception as e:
     st.error(f"❌ 錯誤：{str(e)}")
-    st.info("請確認 Google Sheets 連線設定正確，並檢查工作表名稱是否為：US_Stocks、TW_Stocks、Bank_Cash")
+    
+    with st.expander("🔍 除錯資訊與設定指南", expanded=True):
+        st.markdown("""
+        ### 📋 請確認以下設定：
+        
+        #### 1️⃣ Streamlit Secrets 配置
+        在 Streamlit Cloud 的 Settings → Secrets 中，應包含：
+        
+        ```toml
+        [connections.gsheets]
+        spreadsheet = "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/edit"
+        
+        # 或者只填 Sheet ID：
+        # spreadsheet = "YOUR_SHEET_ID"
+        
+        # Service Account 憑證
+        type = "service_account"
+        project_id = "your-project-id"
+        private_key_id = "your-key-id"
+        private_key = "-----BEGIN PRIVATE KEY-----\\nYOUR_KEY\\n-----END PRIVATE KEY-----\\n"
+        client_email = "your-sa@your-project.iam.gserviceaccount.com"
+        client_id = "your-client-id"
+        auth_uri = "https://accounts.google.com/o/oauth2/auth"
+        token_uri = "https://oauth2.googleapis.com/token"
+        auth_provider_x509_cert_url = "https://www.googleapis.com/oauth2/v1/certs"
+        client_x509_cert_url = "https://www.googleapis.com/robot/v1/metadata/x509/..."
+        ```
+        
+        #### 2️⃣ Google Sheets 設定
+        - ✅ 已建立工作表：`US_Stocks`、`TW_Stocks`、`Bank_Cash`
+        - ✅ Service Account email 已加入共用（編輯者權限）
+        - ✅ 試算表 URL 或 ID 正確填入 secrets
+        
+        #### 3️⃣ Google Cloud 設定
+        - ✅ 已啟用 Google Sheets API
+        - ✅ 已啟用 Google Drive API
+        - ✅ Service Account 已建立並下載 JSON 金鑰
+        
+        #### 4️⃣ 常見錯誤排除
+        - **404 錯誤**：spreadsheet 參數錯誤或未共用給 Service Account
+        - **403 錯誤**：Service Account 沒有編輯權限
+        - **401 錯誤**：憑證設定錯誤
+        
+        ---
+        
+        ### 🔑 快速檢查清單
+        1. 複製試算表 URL：`https://docs.google.com/spreadsheets/d/[這段是ID]/edit`
+        2. 點擊「共用」→ 加入 Service Account email → 設為「編輯者」
+        3. 在 Streamlit Secrets 確認 spreadsheet 值正確
+        4. 重新啟動 App
+        """)
+        
+        st.warning("💡 提示：如果是剛設定完成，請點擊右上角的 ⋮ → Reboot app")
