@@ -101,26 +101,31 @@ st.markdown("<h1 style='text-align: center; color: #1e3c72; margin-bottom: 30px;
 @st.cache_resource
 def get_connection():
     try:
-        # 直接從 secrets 取得 spreadsheet
+        # 檢查 secrets 配置
         if "gsheets" not in st.secrets:
-            raise Exception("找不到 [gsheets] 設定區塊")
+            raise Exception("❌ 找不到 [gsheets] 設定區塊，請檢查 Secrets 設定")
+        
+        gsheets_config = st.secrets["gsheets"]
         
         # 檢查必要參數
-        gsheets_config = st.secrets["gsheets"]
         if "spreadsheet" not in gsheets_config:
-            raise Exception("secrets 中缺少 spreadsheet 參數")
+            raise Exception("❌ secrets 中缺少 spreadsheet 參數")
         
-        spreadsheet_url = gsheets_config["spreadsheet"]
-        if not spreadsheet_url or spreadsheet_url.strip() == "":
-            raise Exception("spreadsheet 參數為空")
+        if not gsheets_config["spreadsheet"] or gsheets_config["spreadsheet"].strip() == "":
+            raise Exception("❌ spreadsheet 參數為空")
         
-        # 建立連線時明確指定 spreadsheet
-        return st.connection("gsheets", type=GSheetsConnection, spreadsheet=spreadsheet_url)
+        # 顯示連線資訊（除錯用）
+        st.info(f"🔗 正在連線到 Sheet ID: {gsheets_config['spreadsheet'][:20]}...")
+        
+        # 建立連線（不傳入 spreadsheet 參數，讓它從 secrets 自動讀取）
+        conn = st.connection("gsheets", type=GSheetsConnection)
+        
+        return conn
+        
     except Exception as e:
         st.error(f"⚠️ Google Sheets 連線失敗：{str(e)}")
         with st.expander("🔍 詳細錯誤資訊", expanded=True):
             st.code(str(e))
-            st.warning("請確認 Streamlit Secrets 已正確設定")
         return None
 
 conn = get_connection()
@@ -372,53 +377,47 @@ except Exception as e:
     
     with st.expander("🔍 除錯資訊與設定指南", expanded=True):
         st.markdown("""
-        ### 📋 請確認以下設定：
+        ### 📋 Streamlit Secrets 正確格式
         
-        #### 1️⃣ Streamlit Secrets 配置
-        在 Streamlit Cloud 的 Settings → Secrets 中，應包含：
+        請在 **Settings → Secrets** 使用以下格式：
         
         ```toml
-        [connections.gsheets]
-        spreadsheet = "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/edit"
+        [gsheets]
+        spreadsheet = "1AbCdEfGhIjKlMnOpQrStUvWxYz"
         
-        # 或者只填 Sheet ID：
-        # spreadsheet = "YOUR_SHEET_ID"
-        
-        # Service Account 憑證
         type = "service_account"
-        project_id = "your-project-id"
-        private_key_id = "your-key-id"
-        private_key = "-----BEGIN PRIVATE KEY-----\\nYOUR_KEY\\n-----END PRIVATE KEY-----\\n"
+        project_id = "your-project-123"
+        private_key_id = "abc123..."
+        private_key = "-----BEGIN PRIVATE KEY-----\\nMII...\\n-----END PRIVATE KEY-----\\n"
         client_email = "your-sa@your-project.iam.gserviceaccount.com"
-        client_id = "your-client-id"
+        client_id = "123456"
         auth_uri = "https://accounts.google.com/o/oauth2/auth"
         token_uri = "https://oauth2.googleapis.com/token"
         auth_provider_x509_cert_url = "https://www.googleapis.com/oauth2/v1/certs"
         client_x509_cert_url = "https://www.googleapis.com/robot/v1/metadata/x509/..."
         ```
         
-        #### 2️⃣ Google Sheets 設定
-        - ✅ 已建立工作表：`US_Stocks`、`TW_Stocks`、`Bank_Cash`
-        - ✅ Service Account email 已加入共用（編輯者權限）
-        - ✅ 試算表 URL 或 ID 正確填入 secrets
+        ### ⚠️ 關鍵要點
         
-        #### 3️⃣ Google Cloud 設定
-        - ✅ 已啟用 Google Sheets API
-        - ✅ 已啟用 Google Drive API
-        - ✅ Service Account 已建立並下載 JSON 金鑰
+        1. **區塊名稱**：必須是 `[gsheets]`（不是 `[connections.gsheets]`）
+        2. **spreadsheet**：只填 Sheet ID（從 URL 的 /d/ 和 /edit 之間複製）
+        3. **private_key**：記得保留 `\\n` 換行符號
+        4. **共用權限**：必須將 `client_email` 加入 Google Sheets 共用（編輯者）
         
-        #### 4️⃣ 常見錯誤排除
-        - **404 錯誤**：spreadsheet 參數錯誤或未共用給 Service Account
-        - **403 錯誤**：Service Account 沒有編輯權限
-        - **401 錯誤**：憑證設定錯誤
+        ### 🔑 取得 Sheet ID
         
-        ---
+        開啟您的 Google Sheets，URL 格式如下：
+        ```
+        https://docs.google.com/spreadsheets/d/[這段就是ID]/edit
+        ```
         
-        ### 🔑 快速檢查清單
-        1. 複製試算表 URL：`https://docs.google.com/spreadsheets/d/[這段是ID]/edit`
-        2. 點擊「共用」→ 加入 Service Account email → 設為「編輯者」
-        3. 在 Streamlit Secrets 確認 spreadsheet 值正確
-        4. 重新啟動 App
+        例如：`1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789`
+        
+        ### 📝 設定後動作
+        
+        1. 點擊 Secrets 頁面的 **Save**
+        2. 回到 App 頁面
+        3. 點擊右上角 ⋮ → **Reboot app**
         """)
         
-        st.warning("💡 提示：如果是剛設定完成，請點擊右上角的 ⋮ → Reboot app")
+        st.warning("💡 如果持續出錯，請確認 Google Cloud 已啟用 Sheets API 和 Drive API")
